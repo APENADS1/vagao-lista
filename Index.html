@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            color: #003366; /* Azul Marinho */
+            text-align: center;
+        }
+        input[type="text"], input[type="datetime-local"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #003366; /* Azul Marinho */
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+        button:hover {
+            background-color: #00509e; /* Azul Claro */
+        }
+        .vagon-item {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 5px 0;
+        }
+        .vagon-item input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .vagon-info {
+            margin-left: 10px; /* Espaçamento entre os elementos */
+            flex: 1;
+            display: flex;
+            justify-content: space-between; /* Para alinhar a entrada e saída */
+        }
+        .autocomplete-suggestions {
+            border: 1px solid #ccc;
+            background-color: #fff;
+            max-height: 150px;
+            overflow-y: auto;
+            position: absolute;
+            z-index: 1000;
+            width: calc(100% - 22px);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .autocomplete-suggestion {
+            padding: 10px;
+            cursor: pointer;
+        }
+        .autocomplete-suggestion:hover {
+            background-color: #e6f0ff; /* Azul Claro */
+        }
+        #popup {
+            display: none;
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border: 2px solid #ccc;
+            box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.2);
+            z-index: 1001;
+        }
+        #popup h3 {
+            margin-top: 0;
+            color: #003366; /* Azul Marinho */
+        }
+        #closePopup {
+            cursor: pointer;
+            color: red;
+            padding: 5px;
+            border: none;
+            background: none;
+            font-size: 16px;
+        }
+        #closePopup:hover {
+            text-decoration: underline;
+        }
+        #successMessage {
+            text-align: center;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h2>Gerenciador de Vagões</h2>
+
+    <input type="text" id="searchInput" placeholder="Digite o vagão..." autocomplete="off">
+    <div id="autocomplete-list" class="autocomplete-suggestions"></div>
+
+    <input type="datetime-local" id="entryTimeInput" placeholder="Data e Hora de Entrada">
+    <button id="addButton">Adicionar Vagão</button>
+
+    <div id="vagonList"></div>
+
+    <input type="datetime-local" id="exitTimeInput" placeholder="Data e Hora de Saída">
+    <button id="removeButton">Remover Vagões</button>
+    <button id="saveButton">Salvar Lista</button>
+    <button id="showPopupButton">Ver Últimas Saídas</button>
+    <p id="successMessage"></p>
+
+    <div id="popup">
+        <h3>Últimas 5 Saídas</h3>
+        <div id="lastExitsList"></div>
+        <button id="closePopup">Fechar</button>
+    </div>
+
+    <script>
+        const availableVagons =  [
+            "10109", "52056", "53024", "57000", "90281", "97725", "285760", "977314",
+            "10146", "52057", "53025", "57003", "90282", "97728", "285761", "977331",
+            "10183", "52058", "53026", "57009", "90285", "97737", "285762", "977403",
+            "10219", "52059", "53027", "57012", "90286", "98329", "285763", "977420",
+            "52000", "52060", "53028", "57015", "90287", "98835", "285767", "977438",
+            "52001", "52061", "53029", "57016", "90289", "98837", "285769", "977527",
+            "52002", "52062", "53030", "57017", "90290", "98838", "285775", "977535",
+            "52003", "52063", "56006", "57021", "90291", "98839", "285779", "977756",
+            "52004", "52064", "56007", "57022", "90292", "98843", "285781", "977292",
+            "52008", "52065", "56008", "57024", "90293", "98844", "285783", "977306",
+            "52009", "52066", "56009", "57026", "90294", "98845", "285786", "977349",
+            "52012", "52067", "56014", "57032", "90295", "98847", "285787", "977365",
+            "52013", "52068", "56018", "57034", "90300", "98849", "285789", "977390",
+            "52014", "52069", "56020", "57044", "90304", "98855", "285791", "977519",
+            "52015", "52070", "56021", "57046", "90307", "98859", "285797", "977578",
+            "52018", "52071", "56023", "57047", "90310", "285701", "285800", "977675",
+            "52019", "52072", "56026", "57048", "90312", "285702", "285807", "977322",
+            "52020", "52073", "56036", "57055", "90315", "285703", "285808", "810681",
+            "52023", "53001", "56040", "57061", "90316", "285704", "285809", "56037",
+            "52025", "53002", "56041", "57064", "90318", "285707", "342234", "52005",
+            "52028", "53003", "56043", "57066", "90319", "285709", "608657", "57086",
+            "52029", "53004", "56044", "57067", "90321", "285723", "609286", "56017",
+            "52030", "53005", "56046", "57072", "90336", "285727", "610227", "56078",
+            "52031", "53006", "56047", "57075", "90345", "285730", "624802", "52024",
+            "52033", "53007", "56063", "57076", "97701", "285731", "625027", "97716",
+            "52034", "53009", "56066", "57084", "97703", "285732", "625059",
+            "52036", "53010", "56072", "70000", "97704", "285733", "625113",
+            "52038", "53011", "56079", "70017", "97705", "285734", "625116",
+            "52041", "53012", "56080", "90250", "97707", "285736", "625129",
+            "52043", "53013", "56085", "90260", "97708", "285737", "625139",
+            "52045", "53014", "56093", "90263", "97709", "285738", "625141",
+            "52046", "53015", "56096", "90265", "97710", "285740", "625146",
+            "52047", "53016", "56098", "90267", "97711", "285741", "626516",
+            "52048", "53017", "56099", "90269", "97714", "285744", "626536",
+            "52049", "53018", "56101", "90270", "97718", "285747", "627009",
+            "52050", "53019", "56102", "90271", "97719", "285750", "627410",
+            "52052", "53020", "56103", "90272", "97721", "285753", "646198",
+            "52053", "53021", "56106", "90276", "97722", "285756", "646216",
+            "52054", "53022", "56107", "90277", "97723", "285757", "977446",
+            "52055", "53023", "56108", "90280", "97724", "285759", "977624"
+        ];
+
+
+
+        let vagaoList = JSON.parse(localStorage.getItem('vagaoList')) || [];
+        let removalHistory = JSON.parse(localStorage.getItem('removalHistory')) || [];
+
+        window.onload = function() {
+            updateVagonList();
+        };
+
+        document.getElementById("addButton").onclick = function() {
+            const selectedVagon = document.getElementById("searchInput").value;
+            const entryTime = document.getElementById("entryTimeInput").value;
+
+            if (selectedVagon && entryTime && vagaoList.length < 50) {
+                vagaoList.push({
+                    vagon: selectedVagon,
+                    checked: false,
+                    loaded: true,
+                    entryTime: new Date(entryTime).toLocaleString('pt-BR'), // Formato em português
+                    exitTime: ''
+                });
+                updateVagonList();
+                saveToLocalStorage();
+                document.getElementById("successMessage").innerText = "Vagão adicionado com sucesso!";
+                document.getElementById("searchInput").value = '';
+            } else if (!entryTime) {
+                document.getElementById("successMessage").innerText = "Por favor, informe a hora de entrada!";
+            } else if (vagaoList.length >= 50) {
+                document.getElementById("successMessage").innerText = "Limite de 50 vagões atingido!";
+            }
+        };
+
+        document.getElementById("removeButton").onclick = function() {
+            const exitTime = document.getElementById("exitTimeInput").value;
+
+            if (!exitTime) {
+                document.getElementById("successMessage").innerText = "Por favor, informe a hora de saída!";
+                return;
+            }
+
+            const formattedExitTime = new Date(exitTime).toLocaleString('pt-BR'); // Formato em português
+            const removedVagons = vagaoList.filter(item => item.checked).map(item => item.vagon);
+            removalHistory.push({ exitTime: formattedExitTime, removedVagons: removedVagons });
+
+            if (removalHistory.length > 5) {
+                removalHistory.shift();
+            }
+
+            vagaoList.forEach(item => {
+                if (item.checked) {
+                    item.exitTime = formattedExitTime;
+                }
+            });
+
+            vagaoList = vagaoList.filter(item => !item.checked);
+            updateVagonList();
+            saveToLocalStorage();
+            document.getElementById("successMessage").innerText = Vagões removidos com saída às: ${formattedExitTime};
+
+            generatePDF(formattedExitTime, removedVagons);
+        };
+
+        document.getElementById("saveButton").onclick = function() {
+            const data = vagaoList.map(item =>
+                ${item.vagon} - Entrada: ${item.entryTime} - Saída: ${item.exitTime || 'Não registrado'} - ${item.loaded ? "Carregado" : "Não Carregado"}
+            ).join('\n');
+            const blob = new Blob([data], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'lista_de_vagoes.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            document.getElementById("successMessage").innerText = "Lista salva com sucesso!";
+        };
+
+        function updateVagonList() {
+            const vagonListDiv = document.getElementById("vagonList");
+            vagonListDiv.innerHTML = '';
+            vagaoList.forEach((item, index) => {
+                const vagonItemDiv = document.createElement("div");
+                vagonItemDiv.className = "vagon-item";
+                vagonItemDiv.innerHTML = 
+                    <input type="checkbox" onchange="vagaoList[${index}].checked = this.checked">
+                    <span>${item.vagon}</span>
+                    <div class="vagon-info">
+                        <span>Entrada: ${item.entryTime}</span>
+                        <span>Saída: ${item.exitTime || 'Não registrado'}</span>
+                    </div>
+                    <label>
+                        <input type="checkbox" onchange="vagaoList[${index}].loaded = this.checked" ${item.loaded ? 'checked' : ''}> Carregado?
+                    </label>
+                ;
+                vagonListDiv.appendChild(vagonItemDiv);
+            });
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('vagaoList', JSON.stringify(vagaoList));
+            localStorage.setItem('removalHistory', JSON.stringify(removalHistory));
+        }
+
+        function generatePDF(exitTime, removedVagons) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text(Saída: ${exitTime}, 10, 10);
+            doc.text(Vagões removidos: ${removedVagons.join(', ')}, 10, 20);
+            doc.save(remocao_vagoes_${exitTime}.pdf);
+        }
+
+        document.getElementById("showPopupButton").onclick = function() {
+            const popup = document.getElementById("popup");
+            const lastExitsList = document.getElementById("lastExitsList");
+            lastExitsList.innerHTML = '';
+
+            removalHistory.forEach(item => {
+                const div = document.createElement("div");
+                div.innerText = Saída: ${item.exitTime} - Vagões: ${item.removedVagons.join(', ')};
+                lastExitsList.appendChild(div);
+            });
+
+            popup.style.display = "block";
+        };
+
+        document.getElementById("closePopup").onclick = function() {
+            document.getElementById("popup").style.display = "none";
+        };
+
+        const searchInput = document.getElementById("searchInput");
+        searchInput.addEventListener("input", function() {
+            const query = this.value.toLowerCase();
+            const suggestions = availableVagons.filter(v => v.toLowerCase().includes(query));
+            const suggestionsContainer = document.getElementById("autocomplete-list");
+            suggestionsContainer.innerHTML = '';
+            suggestions.forEach(s => {
+                const suggestionDiv = document.createElement("div");
+                suggestionDiv.className = "autocomplete-suggestion";
+                suggestionDiv.innerText = s;
+                suggestionDiv.onclick = () => {
+                    searchInput.value = s;
+                    suggestionsContainer.innerHTML = '';
+                };
+                suggestionsContainer.appendChild(suggestionDiv);
+            });
+        });
+    </script>
+</body>
+</html>
